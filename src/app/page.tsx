@@ -32,8 +32,8 @@ const features = [
 ];
 
 const stats = [
-  { label: "등록된 맛집", value: "0" },
-  { label: "리뷰 수", value: "0" },
+  { label: "등록된 맛집", value: "48" },
+  { label: "총 추천수", value: "171" },
   { label: "회원 수", value: "1" },
   { label: "월간 모임", value: "0" },
 ];
@@ -132,12 +132,14 @@ export default function Home() {
                 별도의 앱 전환 없이 바로 예약을 완료하세요.
               </p>
             </div>
-            <Link
-              href="/restaurants"
+            <a
+              href="https://app.catchtable.co.kr"
+              target="_blank"
+              rel="noopener noreferrer"
               className="shrink-0 inline-flex items-center px-8 py-3.5 text-lg font-semibold bg-white text-orange-600 rounded-xl hover:bg-gray-100 transition-colors shadow-lg"
             >
-              식당 검색하기
-            </Link>
+              캐치테이블 바로가기
+            </a>
           </div>
         </div>
       </section>
