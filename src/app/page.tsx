@@ -91,7 +91,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              미식가들의 커뮤니티
+              CVLab 미식가들의 커뮤니티
             </h2>
             <p className="text-gray-600 dark:text-gray-400 text-lg max-w-2xl mx-auto">
               비밀미식회에서 다양한 미식 활동을 즐겨보세요
