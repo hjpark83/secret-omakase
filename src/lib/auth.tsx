@@ -66,21 +66,6 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-/* Seed admin account if not exists */
-function ensureAdmin() {
-  const users = getUsers();
-  const adminExists = users.some((u) => u.role === "admin");
-  if (!adminExists) {
-    users.push({
-      email: "admin@bibmis.com",
-      password: "admin1234",
-      nickname: "관리자",
-      role: "admin",
-      joinedAt: new Date().toISOString().slice(0, 10),
-    });
-    saveUsers(users);
-  }
-}
 
 /* ══════════════════════════════════════
    Context
@@ -100,7 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Init: seed admin + restore session
   useEffect(() => {
-    ensureAdmin();
     const sessionEmail = getSession();
     if (sessionEmail) {
       const users = getUsers();

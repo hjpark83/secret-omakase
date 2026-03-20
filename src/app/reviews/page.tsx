@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { getRestaurants, addRestaurant, geocodeAddress } from "@/lib/restaurants";
 
 interface ReviewImage {
   id: string;
@@ -170,10 +171,12 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
   const [restaurant, setRestaurant] = useState("");
-  const [category, setCategory] = useState("한식");
+  const [address, setAddress] = useState("");
+  const [category, setCategory] = useState("오마카세");
   const [content, setContent] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState<ReviewImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFiles = (files: FileList | File[]) => {
@@ -226,8 +229,38 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
     setUploadedPhotos((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!title || !restaurant || !content || rating === 0) return;
+    setSubmitting(true);
+
+    // Auto-add restaurant to map if address is provided and restaurant doesn't exist
+    if (address) {
+      const existing = getRestaurants();
+      const alreadyExists = existing.some((r) => r.name === restaurant);
+      if (!alreadyExists) {
+        const coords = await geocodeAddress(address);
+        const ctUrl = `https://app.catchtable.co.kr/ct/search?keyword=${encodeURIComponent(restaurant)}`;
+        const mapUrl = `https://map.naver.com/v5/search/${encodeURIComponent(restaurant)}`;
+        addRestaurant({
+          name: restaurant,
+          category: category === "이탈리안" || category === "프렌치" ? "양식" : category === "멕시칸" ? "기타" : category === "카페" ? "기타" : category,
+          area: "기타",
+          address,
+          phone: "", hours: "",
+          description: `리뷰에서 등록된 식당`,
+          catchTableUrl: ctUrl,
+          catchTableRating: 0, catchTableReviewCount: 0,
+          lunchPrice: "–", dinnerPrice: "–",
+          websiteUrl: "", mapUrl, youtubeId: "",
+          tags: [],
+          groupDining: false, groupDiningNote: "",
+          lat: coords?.lat ?? 0, lng: coords?.lng ?? 0,
+          recommendCount: 1,
+        });
+        window.dispatchEvent(new Event("restaurants-updated"));
+      }
+    }
+
     onSubmit({
       id: Date.now(),
       author: "나",
@@ -242,6 +275,7 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
       likes: 0,
       comments: 0,
     });
+    setSubmitting(false);
     onClose();
   };
 
@@ -289,11 +323,26 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
               >
-                {["한식", "일식", "이탈리안", "프렌치", "중식", "멕시칸", "카페", "기타"].map((c) => (
+                {["오마카세", "파인다이닝", "한식", "일식", "양식", "중식", "이탈리안", "프렌치", "카페", "기타"].map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              식당 주소
+              <span className="ml-1.5 text-xs font-normal text-gray-400">(입력하면 지도에 자동 등록됩니다)</span>
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="서울 강남구 도산대로 318"
+              className="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
+            />
           </div>
 
           {/* Title */}
@@ -443,10 +492,10 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
             </button>
             <button
               onClick={handleSubmit}
-              disabled={!title || !restaurant || !content || rating === 0}
+              disabled={!title || !restaurant || !content || rating === 0 || submitting}
               className="px-5 py-2.5 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:dark:bg-gray-700 disabled:cursor-not-allowed rounded-xl transition-colors"
             >
-              리뷰 등록
+              {submitting ? "등록 중..." : "리뷰 등록"}
             </button>
           </div>
         </div>
