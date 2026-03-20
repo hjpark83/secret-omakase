@@ -94,13 +94,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Admin hint */}
-          <div className="mt-5 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl">
-            <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              <span className="font-medium">관리자 계정:</span> admin@bibmis.com / admin1234
-            </p>
-          </div>
-
           <div className="mt-5 text-center text-sm text-gray-600 dark:text-gray-400">
             아직 회원이 아니신가요?{" "}
             <Link href="/signup" className="text-primary-500 hover:text-primary-600 font-medium">회원가입</Link>

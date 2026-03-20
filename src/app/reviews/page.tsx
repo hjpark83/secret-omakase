@@ -108,11 +108,24 @@ function PhotoGallery({ photos }: { photos: ReviewImage[] }) {
       {/* Lightbox */}
       {viewingIdx !== null && (
         <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setViewingIdx(null)}>
-          <button onClick={() => setViewingIdx(null)} className="absolute top-4 right-4 text-white/80 hover:text-white">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          <div className="absolute top-4 right-4 flex items-center gap-2">
+            {photos[viewingIdx].url && (
+              <a
+                href={photos[viewingIdx].url}
+                download={photos[viewingIdx].name}
+                onClick={(e) => e.stopPropagation()}
+                className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                title="다운로드"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              </a>
+            )}
+            <button onClick={() => setViewingIdx(null)} className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
           {/* Nav arrows */}
           {photos.length > 1 && (
             <>
@@ -142,7 +155,7 @@ function PhotoGallery({ photos }: { photos: ReviewImage[] }) {
                 <span>{photos[viewingIdx].name}</span>
               </div>
             )}
-            <div className="text-white/60 text-sm mt-3">{viewingIdx + 1} / {photos.length} - {photos[viewingIdx].name}</div>
+            <div className="text-white/60 text-sm mt-3">{viewingIdx + 1} / {photos.length}</div>
           </div>
         </div>
       )}
@@ -151,6 +164,8 @@ function PhotoGallery({ photos }: { photos: ReviewImage[] }) {
 }
 
 /* ── Review Write Modal ── */
+const MAX_PHOTOS = 20;
+
 function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit: (review: Review) => void }) {
   const [rating, setRating] = useState(0);
   const [title, setTitle] = useState("");
@@ -158,29 +173,53 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
   const [category, setCategory] = useState("한식");
   const [content, setContent] = useState("");
   const [uploadedPhotos, setUploadedPhotos] = useState<ReviewImage[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const processFiles = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    const remaining = MAX_PHOTOS - uploadedPhotos.length;
+    const toProcess = fileArray.slice(0, remaining);
 
-    Array.from(files).forEach((file) => {
+    toProcess.forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setUploadedPhotos((prev) => [
-          ...prev,
-          {
-            id: `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            url: ev.target?.result as string,
-            name: file.name,
-          },
-        ]);
+        setUploadedPhotos((prev) => {
+          if (prev.length >= MAX_PHOTOS) return prev;
+          return [
+            ...prev,
+            {
+              id: `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+              url: ev.target?.result as string,
+              name: file.name,
+            },
+          ];
+        });
       };
       reader.readAsDataURL(file);
     });
+  };
 
-    // reset input so the same file can be re-selected
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) processFiles(e.target.files);
     e.target.value = "";
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files.length > 0) processFiles(e.dataTransfer.files);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
   };
 
   const removePhoto = (id: string) => {
@@ -283,12 +322,15 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
 
           {/* Photo Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">사진 첨부</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">사진 첨부</label>
+              <span className="text-xs text-gray-400">{uploadedPhotos.length} / {MAX_PHOTOS}장</span>
+            </div>
             <div className="space-y-3">
               {/* Uploaded photos preview */}
               {uploadedPhotos.length > 0 && (
-                <div className="grid grid-cols-4 gap-2">
-                  {uploadedPhotos.map((photo) => (
+                <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+                  {uploadedPhotos.map((photo, idx) => (
                     <div key={photo.id} className="relative group rounded-xl overflow-hidden aspect-square bg-gray-100 dark:bg-dark-bg">
                       {photo.url ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -304,30 +346,80 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
+                      <div className="absolute top-1 left-1 bg-black/50 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-medium">
+                        {idx + 1}
+                      </div>
                       <div className="absolute bottom-0 inset-x-0 bg-black/50 text-white text-[10px] px-1.5 py-0.5 truncate">
                         {photo.name}
                       </div>
                     </div>
                   ))}
+                  {/* Add more button (inline) */}
+                  {uploadedPhotos.length < MAX_PHOTOS && (
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="aspect-square rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-500 flex flex-col items-center justify-center gap-1 transition-colors group"
+                    >
+                      <svg className="w-6 h-6 text-gray-400 group-hover:text-primary-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      <span className="text-[10px] text-gray-400 group-hover:text-primary-500 transition-colors">추가</span>
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Upload area */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-600 rounded-xl p-6 flex flex-col items-center justify-center gap-2 transition-colors group"
-              >
-                <div className="w-12 h-12 bg-gray-100 dark:bg-dark-bg rounded-full flex items-center justify-center group-hover:bg-primary-50 dark:group-hover:bg-primary-900/20 transition-colors">
-                  <svg className="w-6 h-6 text-gray-400 group-hover:text-primary-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {/* Upload area (shown when no photos yet) */}
+              {uploadedPhotos.length === 0 && (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-2 transition-colors cursor-pointer group ${
+                    isDragging
+                      ? "border-primary-500 bg-primary-50 dark:bg-primary-900/10"
+                      : "border-gray-300 dark:border-gray-600 hover:border-primary-400 dark:hover:border-primary-600"
+                  }`}
+                >
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-colors ${
+                    isDragging ? "bg-primary-100 dark:bg-primary-900/30" : "bg-gray-100 dark:bg-dark-bg group-hover:bg-primary-50 dark:group-hover:bg-primary-900/20"
+                  }`}>
+                    <svg className={`w-7 h-7 transition-colors ${isDragging ? "text-primary-500" : "text-gray-400 group-hover:text-primary-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <span className={`text-sm font-medium transition-colors ${isDragging ? "text-primary-500" : "text-gray-500 dark:text-gray-400 group-hover:text-primary-500"}`}>
+                    {isDragging ? "여기에 놓으세요!" : "클릭하거나 드래그하여 사진을 업로드하세요"}
+                  </span>
+                  <span className="text-xs text-gray-400">여러 장을 한꺼번에 선택할 수 있어요 (최대 {MAX_PHOTOS}장)</span>
+                  <span className="text-xs text-gray-400">JPG, PNG, WEBP (각 10MB 이하)</span>
+                </div>
+              )}
+
+              {/* Drag overlay when photos already exist */}
+              {uploadedPhotos.length > 0 && uploadedPhotos.length < MAX_PHOTOS && (
+                <div
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  className={`w-full border-2 border-dashed rounded-xl p-3 flex items-center justify-center gap-2 transition-colors cursor-pointer ${
+                    isDragging
+                      ? "border-primary-500 bg-primary-50 dark:bg-primary-900/10"
+                      : "border-gray-200 dark:border-gray-700 hover:border-primary-400 dark:hover:border-primary-600"
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
+                  <span className="text-xs text-gray-400">
+                    {isDragging ? "여기에 놓으세요!" : "사진을 더 추가하려면 클릭하거나 드래그하세요"}
+                  </span>
                 </div>
-                <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-primary-500 transition-colors">
-                  클릭하여 사진을 업로드하세요
-                </span>
-                <span className="text-xs text-gray-400">JPG, PNG, WEBP (최대 10MB)</span>
-              </button>
+              )}
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -341,17 +433,22 @@ function ReviewWriteModal({ onClose, onSubmit }: { onClose: () => void; onSubmit
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 shrink-0">
-          <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-bg hover:bg-gray-200 dark:hover:bg-dark-accent rounded-xl transition-colors">
-            취소
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!title || !restaurant || !content || rating === 0}
-            className="px-5 py-2.5 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:dark:bg-gray-700 disabled:cursor-not-allowed rounded-xl transition-colors"
-          >
-            리뷰 등록
-          </button>
+        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
+          <span className="text-xs text-gray-400">
+            {uploadedPhotos.length > 0 && `사진 ${uploadedPhotos.length}장 첨부됨`}
+          </span>
+          <div className="flex gap-3">
+            <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-bg hover:bg-gray-200 dark:hover:bg-dark-accent rounded-xl transition-colors">
+              취소
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!title || !restaurant || !content || rating === 0}
+              className="px-5 py-2.5 text-sm font-medium text-white bg-primary-500 hover:bg-primary-600 disabled:bg-gray-300 disabled:dark:bg-gray-700 disabled:cursor-not-allowed rounded-xl transition-colors"
+            >
+              리뷰 등록
+            </button>
+          </div>
         </div>
       </div>
     </div>
