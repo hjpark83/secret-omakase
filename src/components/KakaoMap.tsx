@@ -115,16 +115,19 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
       const position = new kakao.maps.LatLng(r.lat, r.lng);
 
       // Marker
-      const markerSize = isSelected ? new kakao.maps.Size(36, 46) : new kakao.maps.Size(28, 36);
+      const mw = isSelected ? 36 : 28;
+      const mh = isSelected ? 46 : 36;
+      const markerSize = new kakao.maps.Size(mw, mh);
       const markerImage = new kakao.maps.MarkerImage(
         `https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png`,
         markerSize,
-        { offset: new kakao.maps.Point(markerSize.Ga / 2, markerSize.Ha) }
+        { offset: new kakao.maps.Point(mw / 2, mh) }
       );
 
       const marker = new kakao.maps.Marker({
         position,
         image: markerImage,
+        clickable: true,
         zIndex: isSelected ? 10 : 1,
       });
       marker.setMap(mapRef.current);
