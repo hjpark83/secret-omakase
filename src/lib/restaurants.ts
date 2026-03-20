@@ -135,8 +135,30 @@ export function getNextId(): number {
   return list.reduce((max, item) => Math.max(max, item.id), 0) + 1;
 }
 
-/** Geocode an address using OpenStreetMap Nominatim (free, no key) */
+/** Geocode using Kakao Maps SDK Geocoder (uses the JavaScript key already loaded) */
 export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  // If Kakao SDK is loaded, use its geocoder
+  if (typeof window !== "undefined" && window.kakao?.maps?.services) {
+    return new Promise((resolve) => {
+      const geocoder = new window.kakao.maps.services.Geocoder();
+      geocoder.addressSearch(address, (result: any[], status: any) => {
+        if (status === window.kakao.maps.services.Status.OK && result.length > 0) {
+          resolve({ lat: parseFloat(result[0].y), lng: parseFloat(result[0].x) });
+        } else {
+          // Fallback: keyword search via Places
+          const ps = new window.kakao.maps.services.Places();
+          ps.keywordSearch(address, (result2: any[], status2: any) => {
+            if (status2 === window.kakao.maps.services.Status.OK && result2.length > 0) {
+              resolve({ lat: parseFloat(result2[0].y), lng: parseFloat(result2[0].x) });
+            } else {
+              resolve(null);
+            }
+          });
+        }
+      });
+    });
+  }
+  // Fallback: Nominatim (free, no key)
   try {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`, {
       headers: { "Accept-Language": "ko" },

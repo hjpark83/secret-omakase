@@ -6,9 +6,9 @@ import Link from "next/link";
 import { getRestaurants, type Restaurant } from "@/lib/restaurants";
 
 /* ══════════════════════════════════════
-   Leaflet Map (dynamic import - SSR off)
+   Kakao Map (dynamic import - SSR off)
    ══════════════════════════════════════ */
-const LeafletMap = dynamic(() => import("@/components/LeafletMap"), { ssr: false, loading: () => (
+const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false, loading: () => (
   <div className="w-full h-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center text-gray-400 text-sm">지도 로딩 중...</div>
 )});
 
@@ -376,7 +376,7 @@ export default function RestaurantsPage() {
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* Map */}
         <div className="flex-1 relative min-h-[300px] lg:min-h-0">
-          <LeafletMap
+          <KakaoMap
             restaurants={baseFiltered}
             onSelect={handleSelect}
             selectedId={selectedId}
