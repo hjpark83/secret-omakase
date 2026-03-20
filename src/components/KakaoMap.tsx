@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 
 const KAKAO_APP_KEY = "22f9f866d1de69e8c0ad97b03da6e4c5";
 
@@ -16,32 +16,64 @@ interface Restaurant {
   recommendCount: number;
 }
 
+export interface KakaoPlace {
+  id: string;
+  place_name: string;
+  category_name: string;
+  address_name: string;
+  road_address_name: string;
+  phone: string;
+  place_url: string;
+  x: string;
+  y: string;
+}
+
 interface Props {
   restaurants: Restaurant[];
   onSelect: (id: number) => void;
   selectedId?: number | null;
   onBoundsChange?: (bounds: { north: number; south: number; east: number; west: number }) => void;
   className?: string;
+  places?: KakaoPlace[];
+  selectedPlaceId?: string | null;
+  onSelectPlace?: (place: KakaoPlace) => void;
 }
 
 /* Global SDK load state */
 let sdkLoaded = false;
 let sdkLoading = false;
-const sdkCallbacks: (() => void)[] = [];
+let sdkError: string | null = null;
+const sdkCallbacks: Array<{ resolve: () => void; reject: (err: string) => void }> = [];
 
 function loadKakaoSDK(): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (sdkLoaded) { resolve(); return; }
-    sdkCallbacks.push(resolve);
+    if (sdkError) { reject(sdkError); return; }
+    sdkCallbacks.push({ resolve, reject });
     if (sdkLoading) return;
     sdkLoading = true;
 
     const script = document.createElement("script");
-    script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+    script.src = `https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_APP_KEY}&autoload=false&libraries=services`;
+    script.onerror = () => {
+      const msg = "카카오맵 SDK 로드 실패. 네트워크 또는 API 키를 확인해주세요.";
+      sdkError = msg;
+      sdkLoading = false;
+      sdkCallbacks.forEach((cb) => cb.reject(msg));
+      sdkCallbacks.length = 0;
+    };
     script.onload = () => {
+      if (!window.kakao?.maps) {
+        const msg = "카카오맵 SDK가 올바르게 로드되지 않았습니다. API 키를 확인해주세요.";
+        sdkError = msg;
+        sdkLoading = false;
+        sdkCallbacks.forEach((cb) => cb.reject(msg));
+        sdkCallbacks.length = 0;
+        return;
+      }
       window.kakao.maps.load(() => {
         sdkLoaded = true;
-        sdkCallbacks.forEach((cb) => cb());
+        sdkCallbacks.forEach((cb) => cb.resolve());
         sdkCallbacks.length = 0;
       });
     };
@@ -49,12 +81,15 @@ function loadKakaoSDK(): Promise<void> {
   });
 }
 
-export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsChange, className }: Props) {
+export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsChange, className, places, selectedPlaceId, onSelectPlace }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const overlaysRef = useRef<any[]>([]);
   const openOverlayRef = useRef<any>(null);
+  const placeMarkersRef = useRef<any[]>([]);
+  const placeOverlaysRef = useRef<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const emitBounds = useCallback(() => {
     if (!mapRef.current || !onBoundsChange) return;
@@ -72,23 +107,25 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
     if (!containerRef.current) return;
     let mounted = true;
 
-    loadKakaoSDK().then(() => {
-      if (!mounted || !containerRef.current || mapRef.current) return;
-      const kakao = window.kakao;
+    loadKakaoSDK()
+      .then(() => {
+        if (!mounted || !containerRef.current || mapRef.current) return;
+        const kakao = window.kakao;
 
-      const map = new kakao.maps.Map(containerRef.current, {
-        center: new kakao.maps.LatLng(37.5236, 127.0286),
-        level: 7,
+        const map = new kakao.maps.Map(containerRef.current, {
+          center: new kakao.maps.LatLng(37.5236, 127.0286),
+          level: 7,
+        });
+
+        map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
+        mapRef.current = map;
+
+        kakao.maps.event.addListener(map, "idle", () => emitBounds());
+        setTimeout(() => emitBounds(), 500);
+      })
+      .catch((err) => {
+        if (mounted) setError(err);
       });
-
-      // Controls
-      map.addControl(new kakao.maps.ZoomControl(), kakao.maps.ControlPosition.RIGHT);
-
-      mapRef.current = map;
-
-      kakao.maps.event.addListener(map, "idle", () => emitBounds());
-      setTimeout(() => emitBounds(), 500);
-    });
 
     return () => {
       mounted = false;
@@ -96,13 +133,12 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
     };
   }, [emitBounds]);
 
-  // Update markers
+  // Update restaurant markers
   useEffect(() => {
     if (!mapRef.current) return;
     const kakao = window.kakao;
     if (!kakao) return;
 
-    // Clear old markers & overlays
     markersRef.current.forEach((m) => m.setMap(null));
     overlaysRef.current.forEach((o) => o.setMap(null));
     markersRef.current = [];
@@ -114,7 +150,6 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
       const isSelected = r.id === selectedId;
       const position = new kakao.maps.LatLng(r.lat, r.lng);
 
-      // Marker
       const mw = isSelected ? 36 : 28;
       const mh = isSelected ? 46 : 36;
       const markerSize = new kakao.maps.Size(mw, mh);
@@ -133,16 +168,15 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
       marker.setMap(mapRef.current);
       markersRef.current.push(marker);
 
-      // Custom overlay (popup)
       const overlayContent = document.createElement("div");
       overlayContent.innerHTML = `
         <div style="background:white;border-radius:12px;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:220px;font-family:'Noto Sans KR',sans-serif;position:relative;">
-          <div style="position:absolute;top:8px;right:10px;cursor:pointer;font-size:16px;color:#aaa;line-height:1;" class="kakao-overlay-close">×</div>
+          <div style="position:absolute;top:8px;right:10px;cursor:pointer;font-size:16px;color:#aaa;line-height:1;" class="kakao-overlay-close">\u00d7</div>
           <div style="font-weight:700;font-size:15px;margin-bottom:4px;padding-right:20px;">${r.name}</div>
           <div style="font-size:11px;color:#888;margin-bottom:8px;">${r.category}</div>
           <div style="display:flex;gap:8px;font-size:13px;margin-bottom:8px;align-items:center;">
-            <span style="color:#EF4444;font-weight:700;">★ ${r.catchTableRating.toFixed(1)}</span>
-            ${r.recommendCount > 0 ? `<span style="color:#f97316;font-weight:500;font-size:12px;">추천 ${r.recommendCount}</span>` : ""}
+            <span style="color:#EF4444;font-weight:700;">\u2605 ${r.catchTableRating.toFixed(1)}</span>
+            ${r.recommendCount > 0 ? `<span style="color:#f97316;font-weight:500;font-size:12px;">\ucd94\ucc9c ${r.recommendCount}</span>` : ""}
           </div>
           <div style="display:flex;gap:8px;font-size:12px;">
             <span style="background:#EFF6FF;color:#1D4ED8;padding:2px 8px;border-radius:6px;font-weight:500;">L ${r.lunchPrice}</span>
@@ -160,29 +194,93 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
       });
       overlaysRef.current.push(overlay);
 
-      // Close button handler
       overlayContent.querySelector(".kakao-overlay-close")?.addEventListener("click", (e) => {
         e.stopPropagation();
         overlay.setMap(null);
         openOverlayRef.current = null;
       });
 
-      // Click handler
       kakao.maps.event.addListener(marker, "click", () => {
-        // Close previous overlay
         if (openOverlayRef.current) openOverlayRef.current.setMap(null);
         overlay.setMap(mapRef.current);
         openOverlayRef.current = overlay;
         onSelect(r.id);
       });
 
-      // Auto-open if selected
       if (isSelected) {
         overlay.setMap(mapRef.current);
         openOverlayRef.current = overlay;
       }
     });
   }, [restaurants, selectedId, onSelect]);
+
+  // Update place markers (Kakao search results)
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const kakao = window.kakao;
+    if (!kakao) return;
+
+    placeMarkersRef.current.forEach((m) => m.setMap(null));
+    placeOverlaysRef.current.forEach((o) => o.setMap(null));
+    placeMarkersRef.current = [];
+    placeOverlaysRef.current = [];
+
+    if (!places?.length) return;
+
+    places.forEach((p) => {
+      const lat = parseFloat(p.y);
+      const lng = parseFloat(p.x);
+      if (!lat || !lng) return;
+      const isSelected = p.id === selectedPlaceId;
+      const position = new kakao.maps.LatLng(lat, lng);
+
+      const marker = new kakao.maps.Marker({
+        position,
+        clickable: true,
+        zIndex: isSelected ? 10 : 1,
+      });
+      marker.setMap(mapRef.current);
+      placeMarkersRef.current.push(marker);
+
+      const shortCategory = p.category_name?.split(" > ").slice(-1)[0] || "";
+      const overlayContent = document.createElement("div");
+      overlayContent.innerHTML = `
+        <div style="background:white;border-radius:12px;padding:14px 16px;box-shadow:0 4px 20px rgba(0,0,0,.15);min-width:220px;font-family:'Noto Sans KR',sans-serif;position:relative;">
+          <div style="position:absolute;top:8px;right:10px;cursor:pointer;font-size:16px;color:#aaa;line-height:1;" class="kakao-overlay-close">\u00d7</div>
+          <div style="font-weight:700;font-size:15px;margin-bottom:4px;padding-right:20px;">${p.place_name}</div>
+          <div style="font-size:11px;color:#888;margin-bottom:6px;">${shortCategory}</div>
+          <div style="font-size:12px;color:#555;margin-bottom:4px;">${p.road_address_name || p.address_name}</div>
+          ${p.phone ? `<div style="font-size:12px;color:#555;margin-bottom:6px;">${p.phone}</div>` : ""}
+          <a href="${p.place_url}" target="_blank" rel="noopener noreferrer" style="display:inline-block;font-size:12px;color:#1D4ED8;font-weight:500;text-decoration:none;">\uce74\uce74\uc624\ub9f5\uc5d0\uc11c \ubcf4\uae30 \u2192</a>
+          <div style="position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-top:8px solid white;"></div>
+        </div>
+      `;
+
+      const overlay = new kakao.maps.CustomOverlay({
+        content: overlayContent,
+        position,
+        yAnchor: 1.15,
+        zIndex: 20,
+      });
+      placeOverlaysRef.current.push(overlay);
+
+      overlayContent.querySelector(".kakao-overlay-close")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        overlay.setMap(null);
+      });
+
+      kakao.maps.event.addListener(marker, "click", () => {
+        if (openOverlayRef.current) { openOverlayRef.current.setMap(null); openOverlayRef.current = null; }
+        placeOverlaysRef.current.forEach((o) => o.setMap(null));
+        overlay.setMap(mapRef.current);
+        onSelectPlace?.(p);
+      });
+
+      if (isSelected) {
+        overlay.setMap(mapRef.current);
+      }
+    });
+  }, [places, selectedPlaceId, onSelectPlace]);
 
   // Pan to selected
   useEffect(() => {
@@ -195,6 +293,23 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
     }
   }, [selectedId, restaurants]);
 
+  if (error) {
+    return (
+      <div className={className || "w-full h-[500px] rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 z-0"}>
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 dark:bg-dark-bg text-center p-6">
+          <span className="text-4xl mb-3">🗺️</span>
+          <p className="text-sm font-medium text-red-500 mb-2">지도를 불러올 수 없습니다</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm">{error}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">
+            카카오 개발자 콘솔에서 사이트 도메인을 등록했는지 확인해주세요.
+            <br />
+            (플랫폼 &gt; Web &gt; 사이트 도메인에 <code className="bg-gray-200 dark:bg-gray-700 px-1 rounded">http://localhost:3000</code> 추가)
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -203,7 +318,6 @@ export default function KakaoMap({ restaurants, onSelect, selectedId, onBoundsCh
   );
 }
 
-/* TypeScript global declaration */
 declare global {
   interface Window {
     kakao: any;

@@ -4,19 +4,16 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { getRestaurants, type Restaurant } from "@/lib/restaurants";
+import type { KakaoPlace } from "@/components/KakaoMap";
 
-/* ══════════════════════════════════════
-   Kakao Map (dynamic import - SSR off)
-   ══════════════════════════════════════ */
 const KakaoMap = dynamic(() => import("@/components/KakaoMap"), { ssr: false, loading: () => (
   <div className="w-full h-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center text-gray-400 text-sm">지도 로딩 중...</div>
 )});
 
-
 /* ══════════════════════════════════════
    Filters
    ══════════════════════════════════════ */
-const categories = [
+const localCategories = [
   { key: "전체", label: "전체" },
   { key: "오마카세", label: "오마카세" },
   { key: "파인다이닝", label: "파인다이닝" },
@@ -24,6 +21,17 @@ const categories = [
   { key: "한식", label: "한식" },
   { key: "중식", label: "중식" },
   { key: "일식", label: "일식" },
+];
+
+const kakaoSearchPresets = [
+  { key: "오마카세", label: "오마카세" },
+  { key: "파인다이닝", label: "파인다이닝" },
+  { key: "스시", label: "스시" },
+  { key: "이탈리안", label: "이탈리안" },
+  { key: "한식 맛집", label: "한식" },
+  { key: "중식 맛집", label: "중식" },
+  { key: "일식 맛집", label: "일식" },
+  { key: "프렌치", label: "프렌치" },
 ];
 
 /* ══════════════════════════════════════
@@ -40,7 +48,7 @@ function StarRating({ rating, size = "sm" }: { rating: number; size?: "sm" | "lg
 }
 
 /* ══════════════════════════════════════
-   Detail Modal
+   Detail Modal (our curated restaurants)
    ══════════════════════════════════════ */
 function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<"info" | "media">("info");
@@ -191,7 +199,7 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
 }
 
 /* ══════════════════════════════════════
-   Side List Item
+   Side List Item (curated)
    ══════════════════════════════════════ */
 function ListItem({ restaurant, isSelected, onClick }: { restaurant: Restaurant; isSelected: boolean; onClick: () => void }) {
   return (
@@ -234,18 +242,68 @@ function ListItem({ restaurant, isSelected, onClick }: { restaurant: Restaurant;
 }
 
 /* ══════════════════════════════════════
+   Side List Item (Kakao place)
+   ══════════════════════════════════════ */
+function PlaceListItem({ place, isSelected, onClick }: { place: KakaoPlace; isSelected: boolean; onClick: () => void }) {
+  const shortCategory = place.category_name?.split(" > ").slice(-1)[0] || "";
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full text-left p-4 border-b border-gray-100 dark:border-gray-700/50 transition-colors hover:bg-gray-50 dark:hover:bg-dark-accent/50 ${isSelected ? "bg-blue-50 dark:bg-blue-900/10 border-l-4 border-l-blue-500" : ""}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{place.place_name}</h3>
+          </div>
+          {shortCategory && (
+            <p className="text-xs text-primary-500 font-medium mb-1">{shortCategory}</p>
+          )}
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 truncate">{place.road_address_name || place.address_name}</p>
+          {place.phone && (
+            <p className="text-xs text-gray-400 dark:text-gray-500">{place.phone}</p>
+          )}
+        </div>
+        <a
+          href={place.place_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 text-xs text-blue-500 hover:text-blue-600 font-medium"
+        >
+          상세 →
+        </a>
+      </div>
+    </button>
+  );
+}
+
+/* ══════════════════════════════════════
    Main Page
    ══════════════════════════════════════ */
 export default function RestaurantsPage() {
+  /* === Shared state === */
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [searchMode, setSearchMode] = useState<"local" | "kakao">("local");
+  const [mapBounds, setMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
+
+  /* === Local mode state === */
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [activeCategory, setActiveCategory] = useState("오마카세");
   const [groupOnly, setGroupOnly] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [localSearch, setLocalSearch] = useState("");
   const [sortBy, setSortBy] = useState<"rating" | "recommend" | "price">("rating");
-  const [mapBounds, setMapBounds] = useState<{ north: number; south: number; east: number; west: number } | null>(null);
   const [filterInMap, setFilterInMap] = useState(true);
+
+  /* === Kakao search mode state === */
+  const [kakaoQuery, setKakaoQuery] = useState("");
+  const [kakaoResults, setKakaoResults] = useState<KakaoPlace[]>([]);
+  const [kakaoSearching, setKakaoSearching] = useState(false);
+  const [kakaoActivePreset, setKakaoActivePreset] = useState<string | null>(null);
+  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
+  const [kakaoPage, setKakaoPage] = useState(1);
+  const [kakaoHasMore, setKakaoHasMore] = useState(false);
 
   useEffect(() => {
     setRestaurants(getRestaurants());
@@ -262,19 +320,18 @@ export default function RestaurantsPage() {
     setMapBounds(bounds);
   }, []);
 
-  // All filtered restaurants (category, group, search)
+  /* === Local filtering === */
   const baseFiltered = useMemo(() => {
     let list = restaurants;
     if (activeCategory !== "전체") list = list.filter((r) => r.category === activeCategory);
     if (groupOnly) list = list.filter((r) => r.groupDining);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (localSearch) {
+      const q = localSearch.toLowerCase();
       list = list.filter((r) => r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q) || r.tags.some((t) => t.toLowerCase().includes(q)));
     }
     return list;
-  }, [activeCategory, groupOnly, searchQuery]);
+  }, [restaurants, activeCategory, groupOnly, localSearch]);
 
-  // Restaurants visible in current map bounds
   const visibleInMap = useMemo(() => {
     if (!filterInMap || !mapBounds) return baseFiltered;
     return baseFiltered.filter((r) =>
@@ -283,7 +340,6 @@ export default function RestaurantsPage() {
     );
   }, [baseFiltered, mapBounds, filterInMap]);
 
-  // Sorted list
   const sorted = useMemo(() => {
     const list = [...visibleInMap];
     if (sortBy === "rating") list.sort((a, b) => b.catchTableRating - a.catchTableRating);
@@ -305,69 +361,206 @@ export default function RestaurantsPage() {
     setDetailId(id);
   }, []);
 
+  /* === Kakao Places search === */
+  const doKakaoSearch = useCallback((keyword: string, page: number = 1) => {
+    if (!keyword.trim()) return;
+    const kakao = (window as any).kakao;
+    if (!kakao?.maps?.services) {
+      alert("카카오맵 SDK가 아직 로드되지 않았습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+    setKakaoSearching(true);
+    if (page === 1) {
+      setKakaoResults([]);
+      setSelectedPlaceId(null);
+    }
+
+    const ps = new kakao.maps.services.Places();
+    const options: any = {
+      size: 15,
+      page,
+      category_group_code: "FD6",
+    };
+
+    // If we have map bounds, search near the center
+    if (mapBounds) {
+      const centerLat = (mapBounds.south + mapBounds.north) / 2;
+      const centerLng = (mapBounds.west + mapBounds.east) / 2;
+      options.location = new kakao.maps.LatLng(centerLat, centerLng);
+      options.sort = kakao.maps.services.SortBy.DISTANCE;
+    }
+
+    ps.keywordSearch(keyword, (data: any[], status: any, pagination: any) => {
+      setKakaoSearching(false);
+      if (status === kakao.maps.services.Status.OK) {
+        if (page === 1) {
+          setKakaoResults(data);
+        } else {
+          setKakaoResults((prev) => [...prev, ...data]);
+        }
+        setKakaoPage(page);
+        setKakaoHasMore(pagination.hasNextPage);
+      } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
+        if (page === 1) setKakaoResults([]);
+        setKakaoHasMore(false);
+      }
+    }, options);
+  }, [mapBounds]);
+
+  const handleKakaoSearchSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    setKakaoActivePreset(null);
+    doKakaoSearch(kakaoQuery, 1);
+  }, [kakaoQuery, doKakaoSearch]);
+
+  const handlePresetClick = useCallback((keyword: string) => {
+    setKakaoActivePreset(keyword);
+    setKakaoQuery(keyword);
+    doKakaoSearch(keyword, 1);
+  }, [doKakaoSearch]);
+
+  const handleSelectPlace = useCallback((place: KakaoPlace) => {
+    setSelectedPlaceId(place.id);
+  }, []);
+
+  /* === Mode switch === */
+  const handleModeSwitch = useCallback((mode: "local" | "kakao") => {
+    setSearchMode(mode);
+    if (mode === "local") {
+      setKakaoResults([]);
+      setSelectedPlaceId(null);
+      setKakaoQuery("");
+      setKakaoActivePreset(null);
+    } else {
+      setSelectedId(null);
+      setDetailId(null);
+    }
+  }, []);
+
   return (
     <div className="h-[calc(100vh-64px)] flex flex-col">
       {/* Top Filter Bar */}
       <div className="bg-white dark:bg-dark-card border-b border-gray-200 dark:border-gray-700 px-4 py-3 shrink-0 z-10">
         <div className="max-w-full mx-auto">
-          {/* Search + filters row */}
+          {/* Mode toggle + Search row */}
           <div className="flex items-center gap-3 mb-3">
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="식당 이름, 주소, 태그 검색..."
-                className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
-              />
+            {/* Mode toggle */}
+            <div className="shrink-0 flex bg-gray-100 dark:bg-dark-bg rounded-xl p-0.5">
+              <button
+                onClick={() => handleModeSwitch("local")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchMode === "local" ? "bg-white dark:bg-dark-card text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+              >
+                우리 맛집
+              </button>
+              <button
+                onClick={() => handleModeSwitch("kakao")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${searchMode === "kakao" ? "bg-white dark:bg-dark-card text-gray-900 dark:text-white shadow-sm" : "text-gray-500 dark:text-gray-400 hover:text-gray-700"}`}
+              >
+                카카오 검색
+              </button>
             </div>
 
-            {/* Group toggle */}
-            <button
-              onClick={() => setGroupOnly(!groupOnly)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${groupOnly ? "bg-green-500 text-white border-green-500" : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-accent"}`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-              회식 10+
-            </button>
+            {/* Search input */}
+            {searchMode === "local" ? (
+              <div className="relative flex-1 max-w-md">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                <input
+                  type="text"
+                  value={localSearch}
+                  onChange={(e) => setLocalSearch(e.target.value)}
+                  placeholder="식당 이름, 주소, 태그 검색..."
+                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
+                />
+              </div>
+            ) : (
+              <form onSubmit={handleKakaoSearchSubmit} className="relative flex-1 max-w-md flex gap-2">
+                <div className="relative flex-1">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <input
+                    type="text"
+                    value={kakaoQuery}
+                    onChange={(e) => setKakaoQuery(e.target.value)}
+                    placeholder="카카오맵에서 검색 (예: 강남 오마카세)"
+                    className="w-full pl-9 pr-4 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={kakaoSearching}
+                  className="shrink-0 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-blue-300 text-white text-sm font-medium rounded-xl transition-colors"
+                >
+                  {kakaoSearching ? "검색 중..." : "검색"}
+                </button>
+              </form>
+            )}
 
-            {/* Map filter toggle */}
-            <button
-              onClick={() => setFilterInMap(!filterInMap)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${filterInMap ? "bg-primary-500 text-white border-primary-500" : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-accent"}`}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-              지도 영역 검색
-            </button>
+            {/* Local mode controls */}
+            {searchMode === "local" && (
+              <>
+                <button
+                  onClick={() => setGroupOnly(!groupOnly)}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${groupOnly ? "bg-green-500 text-white border-green-500" : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-accent"}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  회식 10+
+                </button>
 
-            {/* Sort */}
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as "rating" | "recommend" | "price")}
-              className="shrink-0 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-700 dark:text-gray-300 text-xs font-medium outline-none focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="rating">평점순</option>
-              <option value="recommend">추천순</option>
-              <option value="price">가격순</option>
-            </select>
+                <button
+                  onClick={() => setFilterInMap(!filterInMap)}
+                  className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors border ${filterInMap ? "bg-primary-500 text-white border-primary-500" : "bg-white dark:bg-dark-bg text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-dark-accent"}`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                  지도 영역 검색
+                </button>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "rating" | "recommend" | "price")}
+                  className="shrink-0 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-bg text-gray-700 dark:text-gray-300 text-xs font-medium outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="rating">평점순</option>
+                  <option value="recommend">추천순</option>
+                  <option value="price">가격순</option>
+                </select>
+              </>
+            )}
           </div>
 
           {/* Category chips */}
           <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-            {categories.map((cat) => (
-              <button
-                key={cat.key}
-                onClick={() => setActiveCategory(cat.key)}
-                className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${cat.key === activeCategory ? "bg-primary-500 text-white shadow-sm" : "bg-gray-100 dark:bg-dark-bg text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-accent"}`}
-              >
-                {cat.label}
-              </button>
-            ))}
-            <div className="shrink-0 text-xs text-gray-400 dark:text-gray-500 ml-2">
-              {sorted.length}개 업장
-            </div>
+            {searchMode === "local" ? (
+              <>
+                {localCategories.map((cat) => (
+                  <button
+                    key={cat.key}
+                    onClick={() => setActiveCategory(cat.key)}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${cat.key === activeCategory ? "bg-primary-500 text-white shadow-sm" : "bg-gray-100 dark:bg-dark-bg text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-accent"}`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+                <div className="shrink-0 text-xs text-gray-400 dark:text-gray-500 ml-2">
+                  {sorted.length}개 업장
+                </div>
+              </>
+            ) : (
+              <>
+                {kakaoSearchPresets.map((preset) => (
+                  <button
+                    key={preset.key}
+                    onClick={() => handlePresetClick(preset.key)}
+                    className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium transition-colors ${preset.key === kakaoActivePreset ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-dark-bg text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-accent"}`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+                {kakaoResults.length > 0 && (
+                  <div className="shrink-0 text-xs text-gray-400 dark:text-gray-500 ml-2">
+                    {kakaoResults.length}개 결과
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -377,17 +570,27 @@ export default function RestaurantsPage() {
         {/* Map */}
         <div className="flex-1 relative min-h-[300px] lg:min-h-0">
           <KakaoMap
-            restaurants={baseFiltered}
+            restaurants={searchMode === "local" ? baseFiltered : []}
             onSelect={handleSelect}
             selectedId={selectedId}
             onBoundsChange={handleBoundsChange}
             className="w-full h-full z-0"
+            places={searchMode === "kakao" ? kakaoResults : []}
+            selectedPlaceId={selectedPlaceId}
+            onSelectPlace={handleSelectPlace}
           />
-          {/* "이 지역 재검색" badge */}
-          {filterInMap && (
+          {searchMode === "local" && filterInMap && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-white dark:bg-dark-card shadow-lg rounded-full px-4 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-600 pointer-events-none">
               지도를 이동하면 목록이 자동 갱신됩니다
             </div>
+          )}
+          {searchMode === "kakao" && kakaoResults.length > 0 && (
+            <button
+              onClick={() => doKakaoSearch(kakaoQuery || kakaoActivePreset || "", 1)}
+              className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-blue-500 hover:bg-blue-600 text-white shadow-lg rounded-full px-4 py-2 text-xs font-medium transition-colors"
+            >
+              이 지역에서 재검색
+            </button>
           )}
         </div>
 
@@ -396,10 +599,19 @@ export default function RestaurantsPage() {
           {/* List header */}
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-700/50 flex items-center justify-between shrink-0">
             <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
-              {filterInMap ? "지도 영역 내 " : ""}식당 목록
-              <span className="ml-1.5 text-primary-500 font-bold">{sorted.length}</span>
+              {searchMode === "local" ? (
+                <>
+                  {filterInMap ? "지도 영역 내 " : ""}식당 목록
+                  <span className="ml-1.5 text-primary-500 font-bold">{sorted.length}</span>
+                </>
+              ) : (
+                <>
+                  카카오 검색 결과
+                  <span className="ml-1.5 text-blue-500 font-bold">{kakaoResults.length}</span>
+                </>
+              )}
             </h2>
-            {groupOnly && (
+            {searchMode === "local" && groupOnly && (
               <span className="text-[10px] text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full font-medium">
                 단체 전용
               </span>
@@ -408,24 +620,54 @@ export default function RestaurantsPage() {
 
           {/* Scrollable list */}
           <div className="flex-1 overflow-y-auto">
-            {sorted.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
-                <span className="text-4xl mb-3">🍣</span>
-                <p className="text-sm">이 영역에 해당 업장이 없습니다</p>
-                <p className="text-xs mt-1">지도를 이동하거나 필터를 변경해보세요</p>
-              </div>
+            {searchMode === "local" ? (
+              sorted.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+                  <span className="text-4xl mb-3">🍣</span>
+                  <p className="text-sm">이 영역에 해당 업장이 없습니다</p>
+                  <p className="text-xs mt-1">지도를 이동하거나 필터를 변경해보세요</p>
+                </div>
+              ) : (
+                sorted.map((rest) => (
+                  <ListItem
+                    key={rest.id}
+                    restaurant={rest}
+                    isSelected={rest.id === selectedId}
+                    onClick={() => {
+                      setSelectedId(rest.id);
+                      handleOpenDetail(rest.id);
+                    }}
+                  />
+                ))
+              )
             ) : (
-              sorted.map((rest) => (
-                <ListItem
-                  key={rest.id}
-                  restaurant={rest}
-                  isSelected={rest.id === selectedId}
-                  onClick={() => {
-                    setSelectedId(rest.id);
-                    handleOpenDetail(rest.id);
-                  }}
-                />
-              ))
+              kakaoResults.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 dark:text-gray-500">
+                  <span className="text-4xl mb-3">🔍</span>
+                  <p className="text-sm">{kakaoSearching ? "검색 중..." : "카카오맵에서 맛집을 검색해보세요"}</p>
+                  <p className="text-xs mt-1">카테고리를 클릭하거나 키워드를 입력하세요</p>
+                </div>
+              ) : (
+                <>
+                  {kakaoResults.map((place) => (
+                    <PlaceListItem
+                      key={place.id}
+                      place={place}
+                      isSelected={place.id === selectedPlaceId}
+                      onClick={() => setSelectedPlaceId(place.id)}
+                    />
+                  ))}
+                  {kakaoHasMore && (
+                    <button
+                      onClick={() => doKakaoSearch(kakaoQuery || kakaoActivePreset || "", kakaoPage + 1)}
+                      disabled={kakaoSearching}
+                      className="w-full py-3 text-sm text-blue-500 hover:text-blue-600 font-medium hover:bg-blue-50 dark:hover:bg-blue-900/10 transition-colors"
+                    >
+                      {kakaoSearching ? "로딩 중..." : "더보기"}
+                    </button>
+                  )}
+                </>
+              )
             )}
           </div>
 
