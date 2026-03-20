@@ -2,25 +2,18 @@ import Link from "next/link";
 
 const features = [
   {
+    icon: "🔍",
+    title: "식당 검색",
+    description: "오마카세, 파인다이닝 등 지도에서 식당을 검색하고 추천하세요.",
+    href: "/restaurants",
+    color: "from-red-400 to-pink-500",
+  },
+  {
     icon: "⭐",
     title: "맛집 리뷰",
     description: "직접 방문한 식당의 솔직한 리뷰와 평점을 공유하세요.",
     href: "/reviews",
     color: "from-yellow-400 to-orange-500",
-  },
-  {
-    icon: "🍴",
-    title: "식당 추천",
-    description: "숨겨진 맛집을 추천하고 새로운 미식 세계를 발견하세요.",
-    href: "/restaurants",
-    color: "from-red-400 to-pink-500",
-  },
-  {
-    icon: "📚",
-    title: "미식 지식",
-    description: "요리, 식재료, 와인 등 미식에 관한 깊이 있는 지식을 쌓으세요.",
-    href: "/knowledge",
-    color: "from-blue-400 to-indigo-500",
   },
   {
     icon: "🗳️",
@@ -70,7 +63,7 @@ export default function Home() {
                 href="/restaurants"
                 className="inline-flex items-center justify-center px-8 py-3.5 text-lg font-semibold border-2 border-white/50 text-white rounded-xl hover:bg-white/10 transition-colors"
               >
-                맛집 둘러보기
+                식당 검색하기
               </Link>
             </div>
           </div>
@@ -105,7 +98,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature) => (
               <Link key={feature.title} href={feature.href}>
                 <div className="card-hover bg-white dark:bg-dark-card rounded-2xl p-6 h-full border border-gray-100 dark:border-gray-700">
@@ -143,7 +136,7 @@ export default function Home() {
               href="/restaurants"
               className="shrink-0 inline-flex items-center px-8 py-3.5 text-lg font-semibold bg-white text-orange-600 rounded-xl hover:bg-gray-100 transition-colors shadow-lg"
             >
-              예약 가능 식당 보기
+              식당 검색하기
             </Link>
           </div>
         </div>

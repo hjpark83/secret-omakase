@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useAuth } from "@/lib/auth";
 
 /* ── Types ── */
 interface Member {
@@ -50,11 +52,62 @@ function StatCard({ label, value, icon, color }: { label: string; value: string 
 
 /* ── Main Page ── */
 export default function AdminPage() {
+  const { user, isAdmin, isLoading } = useAuth();
   const [members, setMembers] = useState<Member[]>(initialMembers);
   const [roleFilter, setRoleFilter] = useState<"all" | Member["role"]>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ id: number; action: "delete" | "approve" } | null>(null);
+
+  // Load registered users from localStorage into member list
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem("secret-gourmet-users");
+      if (!raw) return;
+      const users = JSON.parse(raw) as { email: string; nickname: string; role: string; joinedAt: string }[];
+      const mapped: Member[] = users.map((u, i) => ({
+        id: i + 1,
+        name: u.nickname,
+        email: u.email,
+        role: u.role as Member["role"],
+        joinedAt: u.joinedAt,
+        lastActive: u.joinedAt,
+        reviewCount: 0,
+        voteCount: 0,
+        avatar: u.nickname.slice(0, 2).toUpperCase(),
+      }));
+      setMembers(mapped);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Auth guard
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-gray-400 dark:text-gray-500 text-sm">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (!user || !isAdmin) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">접근 권한이 없습니다</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">관리자 계정으로 로그인해주세요.</p>
+          <Link href="/login" className="inline-flex items-center px-6 py-3 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-xl transition-colors">
+            로그인하기
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const filtered = members.filter((m) => {
     if (roleFilter !== "all" && m.role !== roleFilter) return false;
@@ -67,8 +120,27 @@ export default function AdminPage() {
   const totalReviews = members.reduce((s, m) => s + m.reviewCount, 0);
   const totalVotes = members.reduce((s, m) => s + m.voteCount, 0);
 
+  // Sync changes back to localStorage
+  const syncToStorage = (updatedMembers: Member[]) => {
+    try {
+      const raw = localStorage.getItem("secret-gourmet-users");
+      if (!raw) return;
+      const users = JSON.parse(raw) as { email: string; password: string; nickname: string; role: string; joinedAt: string }[];
+      const updated = users.map((u) => {
+        const match = updatedMembers.find((m) => m.email === u.email);
+        if (match) return { ...u, role: match.role };
+        return u;
+      }).filter((u) => updatedMembers.some((m) => m.email === u.email));
+      localStorage.setItem("secret-gourmet-users", JSON.stringify(updated));
+    } catch { /* ignore */ }
+  };
+
   const changeRole = (id: number, newRole: Member["role"]) => {
-    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, role: newRole } : m)));
+    setMembers((prev) => {
+      const next = prev.map((m) => (m.id === id ? { ...m, role: newRole } : m));
+      syncToStorage(next);
+      return next;
+    });
     setEditingId(null);
   };
 
@@ -78,7 +150,11 @@ export default function AdminPage() {
   };
 
   const deleteMember = (id: number) => {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
+    setMembers((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      syncToStorage(next);
+      return next;
+    });
     setConfirmAction(null);
   };
 

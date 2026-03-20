@@ -1,6 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import dynamic from "next/dynamic";
+import Link from "next/link";
+
+/* ══════════════════════════════════════
+   Leaflet Map (dynamic import – SSR 불가)
+   ══════════════════════════════════════ */
+const LeafletMap = dynamic(() => import("@/components/LeafletMap"), { ssr: false, loading: () => (
+  <div className="w-full h-[400px] bg-gray-100 dark:bg-dark-bg rounded-2xl flex items-center justify-center text-gray-400 text-sm">지도 로딩 중...</div>
+)});
 
 /* ══════════════════════════════════════
    Types
@@ -13,7 +22,7 @@ interface MemberReview {
   photos: string[];
 }
 
-interface Restaurant {
+export interface Restaurant {
   id: number;
   name: string;
   category: string;
@@ -31,15 +40,16 @@ interface Restaurant {
   mapUrl: string;
   youtubeId: string;
   tags: string[];
-  groupDining: boolean;          // 10명 이상 예약 가능 여부
-  groupDiningNote: string;       // 회식 관련 참고 사항
+  groupDining: boolean;
+  groupDiningNote: string;
   lat: number;
   lng: number;
+  recommendCount: number;  // 추천 수
   memberReviews: MemberReview[];
 }
 
 /* ══════════════════════════════════════
-   Data (empty – add restaurants here)
+   Data (빈 배열 – 여기에 식당 추가)
    ══════════════════════════════════════ */
 const restaurants: Restaurant[] = [];
 
@@ -72,91 +82,6 @@ function StarRating({ rating, size = "sm" }: { rating: number; size?: "sm" | "lg
 }
 
 /* ══════════════════════════════════════
-   Map Component (Kakao Map embed)
-   ══════════════════════════════════════ */
-function MapSection({ restaurants: list, onSelect }: { restaurants: Restaurant[]; onSelect: (id: number) => void }) {
-  // Seoul center coordinates for default view
-  const defaultLat = 37.5236;
-  const defaultLng = 127.0286;
-
-  // Simplified interactive map - plots restaurant dots on a visual area grid
-  // For production, replace with Kakao/Naver Map SDK
-  return (
-    <div className="relative w-full h-[400px] bg-gray-100 dark:bg-dark-bg rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
-      {/* Map placeholder background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-green-50 dark:from-gray-800 dark:to-gray-900">
-        {/* Grid lines for reference */}
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "linear-gradient(rgba(0,0,0,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.1) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-
-        {/* Area labels */}
-        {[
-          { label: "종로/을지로", top: "15%", left: "40%" },
-          { label: "이태원/한남", top: "45%", left: "45%" },
-          { label: "강남/서초", top: "65%", left: "45%" },
-          { label: "성수/건대", top: "30%", left: "65%" },
-          { label: "여의도/마포", top: "40%", left: "20%" },
-        ].map((a) => (
-          <div key={a.label} className="absolute text-[10px] font-medium text-gray-400 dark:text-gray-500 select-none" style={{ top: a.top, left: a.left }}>
-            {a.label}
-          </div>
-        ))}
-
-        {/* Restaurant pins */}
-        {list.map((r) => {
-          // Map lat/lng to percentage positions within Seoul bounding box
-          const latMin = 37.48, latMax = 37.58, lngMin = 126.90, lngMax = 127.10;
-          const top = ((latMax - r.lat) / (latMax - latMin)) * 100;
-          const left = ((r.lng - lngMin) / (lngMax - lngMin)) * 100;
-          return (
-            <button
-              key={r.id}
-              onClick={() => onSelect(r.id)}
-              className="absolute z-10 group"
-              style={{ top: `${Math.max(5, Math.min(90, top))}%`, left: `${Math.max(5, Math.min(90, left))}%`, transform: "translate(-50%, -100%)" }}
-            >
-              {/* Pin */}
-              <div className="flex flex-col items-center">
-                <div className="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap mb-1">
-                  {r.name}
-                  <div className="flex items-center gap-1 text-[9px] text-red-100">
-                    <span>★ {r.catchTableRating.toFixed(1)}</span>
-                    <span>|</span>
-                    <span>{r.lunchPrice}</span>
-                  </div>
-                </div>
-                <svg className="w-7 h-7 text-red-500 drop-shadow-md group-hover:text-red-600 group-hover:scale-125 transition-all" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" />
-                </svg>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Legend */}
-      <div className="absolute bottom-3 left-3 bg-white/90 dark:bg-dark-card/90 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-gray-600 dark:text-gray-400 shadow">
-        <div className="flex items-center gap-1.5">
-          <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z" /></svg>
-          <span>핀을 hover하면 정보가 표시됩니다</span>
-        </div>
-        <div className="mt-1 text-[10px] text-gray-400">총 {list.length}개 업장</div>
-      </div>
-
-      {/* Empty state */}
-      {list.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-center text-gray-400 dark:text-gray-500">
-            <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            <p className="text-sm">등록된 업장이 없습니다</p>
-            <p className="text-xs mt-1">업장을 등록하면 지도에 표시됩니다</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════
    Detail Modal
    ══════════════════════════════════════ */
 function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onClose: () => void }) {
@@ -167,23 +92,27 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-3xl max-h-[90vh] bg-white dark:bg-dark-card rounded-2xl overflow-hidden shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
 
-        {/* Header image area */}
+        {/* Header */}
         <div className="relative h-48 bg-gradient-to-br from-orange-200 to-red-100 dark:from-dark-accent dark:to-dark-bg flex items-center justify-center shrink-0">
           <span className="text-6xl opacity-40">🍣</span>
           <button onClick={onClose} className="absolute top-4 right-4 w-9 h-9 bg-black/40 hover:bg-black/60 text-white rounded-full flex items-center justify-center transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
-          {/* Group dining badge */}
           {restaurant.groupDining && (
             <div className="absolute top-4 left-4 bg-green-500 text-white text-xs font-medium px-2.5 py-1 rounded-lg flex items-center gap-1">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
               10+ 단체 가능
             </div>
           )}
+          {/* Recommend badge */}
+          {restaurant.recommendCount > 0 && (
+            <div className="absolute bottom-4 left-4 bg-primary-500 text-white text-xs font-medium px-2.5 py-1 rounded-lg">
+              추천 {restaurant.recommendCount}회
+            </div>
+          )}
         </div>
 
         <div className="overflow-y-auto flex-1">
-          {/* Title & quick info */}
           <div className="px-6 pt-5 pb-3">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -202,7 +131,16 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
               </div>
             </div>
 
-            {/* Price info */}
+            {/* Recommend + Review link */}
+            {restaurant.recommendCount > 0 && (
+              <Link href={`/reviews?restaurant=${encodeURIComponent(restaurant.name)}`}
+                className="inline-flex items-center gap-1.5 mt-3 text-sm text-primary-500 hover:text-primary-600 font-medium transition-colors">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>
+                추천 리뷰 {restaurant.recommendCount}개 보기
+              </Link>
+            )}
+
+            {/* Price */}
             <div className="grid grid-cols-2 gap-3 mt-4">
               <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 text-center">
                 <div className="text-[10px] text-blue-500 dark:text-blue-400 font-medium uppercase tracking-wider">Lunch</div>
@@ -214,7 +152,7 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
               </div>
             </div>
 
-            {/* Action buttons */}
+            {/* Actions */}
             <div className="flex flex-wrap gap-2 mt-4">
               <a href={restaurant.catchTableUrl} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
@@ -229,7 +167,6 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
               {restaurant.websiteUrl && (
                 <a href={restaurant.websiteUrl} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-dark-bg hover:bg-gray-200 dark:hover:bg-dark-accent rounded-lg transition-colors">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9" /></svg>
                   홈페이지
                 </a>
               )}
@@ -248,49 +185,33 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
             </div>
           </div>
 
-          {/* Tab content */}
           <div className="px-6 py-5">
             {activeTab === "info" && (
               <div className="space-y-5">
                 <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{restaurant.description}</p>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl">
                     <span className="text-lg mt-0.5">📍</span>
-                    <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">주소</div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.address}</div>
-                    </div>
+                    <div><div className="text-xs text-gray-500 dark:text-gray-400">주소</div><div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.address}</div></div>
                   </div>
                   <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl">
                     <span className="text-lg mt-0.5">📞</span>
-                    <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">전화번호</div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.phone}</div>
-                    </div>
+                    <div><div className="text-xs text-gray-500 dark:text-gray-400">전화번호</div><div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.phone}</div></div>
                   </div>
                   <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-dark-bg rounded-xl sm:col-span-2">
                     <span className="text-lg mt-0.5">🕐</span>
-                    <div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">영업시간</div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.hours}</div>
-                    </div>
+                    <div><div className="text-xs text-gray-500 dark:text-gray-400">영업시간</div><div className="text-sm font-medium text-gray-900 dark:text-white">{restaurant.hours}</div></div>
                   </div>
                 </div>
-
-                {/* Group dining info */}
                 {restaurant.groupDining && (
                   <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-1">
                       <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                       <span className="text-sm font-semibold text-green-800 dark:text-green-300">10인 이상 단체 예약 가능</span>
                     </div>
-                    {restaurant.groupDiningNote && (
-                      <p className="text-xs text-green-700 dark:text-green-400 ml-7">{restaurant.groupDiningNote}</p>
-                    )}
+                    {restaurant.groupDiningNote && <p className="text-xs text-green-700 dark:text-green-400 ml-7">{restaurant.groupDiningNote}</p>}
                   </div>
                 )}
-
                 <div className="flex flex-wrap gap-1.5">
                   {restaurant.tags.map((tag) => (
                     <span key={tag} className="text-xs text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-dark-bg px-3 py-1 rounded-full">#{tag}</span>
@@ -298,13 +219,10 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
                 </div>
               </div>
             )}
-
             {activeTab === "reviews" && (
               <div className="space-y-4">
                 {restaurant.memberReviews.length === 0 && (
-                  <div className="text-center py-8 text-gray-400 dark:text-gray-500">
-                    <p className="text-sm">아직 방문 후기가 없습니다</p>
-                  </div>
+                  <div className="text-center py-8 text-gray-400 dark:text-gray-500"><p className="text-sm">아직 방문 후기가 없습니다</p></div>
                 )}
                 {restaurant.memberReviews.map((review, i) => (
                   <div key={i} className="p-4 bg-gray-50 dark:bg-dark-bg rounded-xl">
@@ -319,18 +237,10 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
                       </div>
                     </div>
                     <p className="text-sm text-gray-700 dark:text-gray-300">{review.comment}</p>
-                    {review.photos.length > 0 && (
-                      <div className="flex gap-2 mt-3">
-                        {review.photos.map((_, pi) => (
-                          <div key={pi} className="w-16 h-16 rounded-lg bg-gray-200 dark:bg-dark-card flex items-center justify-center text-xl">📷</div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
             )}
-
             {activeTab === "media" && (
               <div>
                 {restaurant.youtubeId ? (
@@ -341,10 +251,7 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-gray-400 dark:text-gray-500">
-                    <span className="text-4xl block mb-3">🎬</span>
-                    <p className="text-sm">등록된 미디어가 없습니다</p>
-                  </div>
+                  <div className="text-center py-12 text-gray-400 dark:text-gray-500"><span className="text-4xl block mb-3">🎬</span><p className="text-sm">등록된 미디어가 없습니다</p></div>
                 )}
               </div>
             )}
@@ -360,66 +267,67 @@ function RestaurantModal({ restaurant, onClose }: { restaurant: Restaurant; onCl
    ══════════════════════════════════════ */
 function RestaurantCard({ restaurant, onClick }: { restaurant: Restaurant; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="text-left card-hover bg-white dark:bg-dark-card rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all w-full">
-      {/* Thumbnail */}
-      <div className="h-40 bg-gradient-to-br from-orange-100 to-red-50 dark:from-dark-accent dark:to-dark-bg flex items-center justify-center relative">
-        <span className="text-5xl opacity-60">🍣</span>
-        <div className="absolute top-3 left-3 flex gap-1.5">
-          <span className="text-xs font-medium text-white bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-md">{restaurant.category}</span>
-        </div>
-        {/* CatchTable rating badge */}
-        <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-          ★ {restaurant.catchTableRating.toFixed(1)}
-        </div>
-        {/* Group dining badge */}
-        {restaurant.groupDining && (
-          <div className="absolute bottom-3 left-3 bg-green-500/90 text-white text-[10px] font-medium px-2 py-0.5 rounded-md backdrop-blur-sm">
-            10+ 단체
+    <div className="card-hover bg-white dark:bg-dark-card rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-700 transition-all">
+      <button onClick={onClick} className="text-left w-full focus:outline-none">
+        {/* Thumbnail */}
+        <div className="h-40 bg-gradient-to-br from-orange-100 to-red-50 dark:from-dark-accent dark:to-dark-bg flex items-center justify-center relative">
+          <span className="text-5xl opacity-60">🍣</span>
+          <div className="absolute top-3 left-3 flex gap-1.5">
+            <span className="text-xs font-medium text-white bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded-md">{restaurant.category}</span>
           </div>
-        )}
-        {restaurant.youtubeId && (
-          <div className="absolute bottom-3 right-3">
-            <span className="text-xs font-medium text-white bg-red-600/90 backdrop-blur-sm px-2 py-0.5 rounded-md flex items-center gap-1">
-              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#fff" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
-              영상
-            </span>
+          <div className="absolute top-3 right-3 bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
+            ★ {restaurant.catchTableRating.toFixed(1)}
           </div>
-        )}
-      </div>
+          {restaurant.groupDining && (
+            <div className="absolute bottom-3 left-3 bg-green-500/90 text-white text-[10px] font-medium px-2 py-0.5 rounded-md backdrop-blur-sm">10+ 단체</div>
+          )}
+          {restaurant.youtubeId && (
+            <div className="absolute bottom-3 right-3">
+              <span className="text-xs font-medium text-white bg-red-600/90 backdrop-blur-sm px-2 py-0.5 rounded-md flex items-center gap-1">
+                <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/><path fill="#fff" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                영상
+              </span>
+            </div>
+          )}
+        </div>
+        <div className="p-4">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 truncate">{restaurant.name}</h3>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{restaurant.area} | {restaurant.address}</p>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">L</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{restaurant.lunchPrice}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-medium text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded">D</span>
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{restaurant.dinnerPrice}</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-red-400">캐치테이블</span>
+              <span className="text-yellow-500 text-sm">★</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white">{restaurant.catchTableRating.toFixed(1)}</span>
+              <span className="text-xs text-gray-400">({restaurant.catchTableReviewCount})</span>
+            </div>
+            <div className="flex gap-1">
+              {restaurant.tags.slice(0, 2).map((tag) => (
+                <span key={tag} className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-bg px-1.5 py-0.5 rounded">#{tag}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </button>
 
-      {/* Body */}
-      <div className="p-4">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1 truncate">{restaurant.name}</h3>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{restaurant.area} | {restaurant.address}</p>
-
-        {/* Price row */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded">L</span>
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{restaurant.lunchPrice}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-medium text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded">D</span>
-            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">{restaurant.dinnerPrice}</span>
-          </div>
-        </div>
-
-        {/* Bottom row */}
-        <div className="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-700">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-red-400">캐치테이블</span>
-            <span className="text-yellow-500 text-sm">★</span>
-            <span className="text-sm font-bold text-gray-900 dark:text-white">{restaurant.catchTableRating.toFixed(1)}</span>
-            <span className="text-xs text-gray-400">({restaurant.catchTableReviewCount})</span>
-          </div>
-          <div className="flex gap-1">
-            {restaurant.tags.slice(0, 2).map((tag) => (
-              <span key={tag} className="text-[10px] text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-bg px-1.5 py-0.5 rounded">#{tag}</span>
-            ))}
-          </div>
-        </div>
-      </div>
-    </button>
+      {/* Recommend badge – links to reviews */}
+      {restaurant.recommendCount > 0 && (
+        <Link href={`/reviews?restaurant=${encodeURIComponent(restaurant.name)}`}
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-gray-100 dark:border-gray-700 text-sm font-medium text-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/10 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" /></svg>
+          추천 {restaurant.recommendCount}회 | 리뷰 보기
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -432,25 +340,19 @@ export default function RestaurantsPage() {
   const [activeArea, setActiveArea] = useState("전체");
   const [activeTab, setActiveTab] = useState<"list" | "group">("list");
   const [showMap, setShowMap] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const filtered = useMemo(() => {
     let list = restaurants;
-
-    // Tab filter
-    if (activeTab === "group") {
-      list = list.filter((r) => r.groupDining);
-    }
-
-    // Category filter
+    if (activeTab === "group") list = list.filter((r) => r.groupDining);
     list = list.filter((r) => r.category === activeCategory);
-
-    // Area filter
-    if (activeArea !== "전체") {
-      list = list.filter((r) => r.area === activeArea);
+    if (activeArea !== "전체") list = list.filter((r) => r.area === activeArea);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter((r) => r.name.toLowerCase().includes(q) || r.address.toLowerCase().includes(q) || r.tags.some((t) => t.toLowerCase().includes(q)));
     }
-
     return list;
-  }, [activeCategory, activeArea, activeTab]);
+  }, [activeCategory, activeArea, activeTab, searchQuery]);
 
   const selected = restaurants.find((r) => r.id === selectedId) ?? null;
 
@@ -458,10 +360,15 @@ export default function RestaurantsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">식당 추천</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          비밀미식회가 엄선한 맛집을 만나보세요. 카드를 클릭하면 상세 정보를 확인할 수 있습니다.
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">식당 검색</h1>
+        <p className="text-gray-600 dark:text-gray-400">오마카세, 파인다이닝 등 비밀미식회가 검증한 맛집을 검색하세요.</p>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative mb-6">
+        <svg className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+        <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="식당 이름, 주소, 태그로 검색..."
+          className="w-full pl-12 pr-4 py-3.5 rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-dark-card text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm shadow-sm" />
       </div>
 
       {/* Tab: 전체 / 회식 */}
@@ -477,7 +384,7 @@ export default function RestaurantsPage() {
         </button>
       </div>
 
-      {/* Category Filter - 오마카세 default */}
+      {/* Category */}
       <div className="flex flex-wrap gap-2 mb-4">
         {categories.map((cat) => (
           <button key={cat.key} onClick={() => setActiveCategory(cat.key)}
@@ -487,7 +394,7 @@ export default function RestaurantsPage() {
         ))}
       </div>
 
-      {/* Area Filter */}
+      {/* Area */}
       <div className="flex flex-wrap gap-2 mb-6">
         {areas.map((area) => (
           <button key={area} onClick={() => setActiveArea(area)}
@@ -497,16 +404,16 @@ export default function RestaurantsPage() {
         ))}
       </div>
 
-      {/* Map toggle + Map */}
+      {/* Map */}
       <div className="mb-6">
         <button onClick={() => setShowMap(!showMap)} className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors mb-3">
           <svg className={`w-4 h-4 transition-transform ${showMap ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           {showMap ? "지도 숨기기" : "지도 보기"}
         </button>
-        {showMap && <MapSection restaurants={filtered} onSelect={setSelectedId} />}
+        {showMap && <LeafletMap restaurants={filtered} onSelect={setSelectedId} />}
       </div>
 
-      {/* Group dining description */}
+      {/* Group dining banner */}
       {activeTab === "group" && (
         <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-2xl p-5 mb-6">
           <div className="flex items-center gap-2 mb-1">
@@ -517,24 +424,19 @@ export default function RestaurantsPage() {
         </div>
       )}
 
-      {/* Restaurant Grid */}
+      {/* Grid */}
       {filtered.length === 0 && (
         <div className="text-center py-16 text-gray-400 dark:text-gray-500">
           <span className="text-5xl block mb-4">{activeTab === "group" ? "👥" : "🍣"}</span>
-          <p className="text-sm">
-            {activeTab === "group"
-              ? "아직 등록된 회식 가능 업장이 없습니다"
-              : "아직 등록된 식당이 없습니다"}
-          </p>
+          <p className="text-sm">{searchQuery ? `"${searchQuery}" 검색 결과가 없습니다` : "아직 등록된 식당이 없습니다"}</p>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map((restaurant) => (
-          <RestaurantCard key={restaurant.id} restaurant={restaurant} onClick={() => setSelectedId(restaurant.id)} />
+        {filtered.map((r) => (
+          <RestaurantCard key={r.id} restaurant={r} onClick={() => setSelectedId(r.id)} />
         ))}
       </div>
 
-      {/* Modal */}
       {selected && <RestaurantModal restaurant={selected} onClose={() => setSelectedId(null)} />}
     </div>
   );
