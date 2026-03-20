@@ -23,75 +23,7 @@ interface Review {
   comments: number;
 }
 
-const initialReviews: Review[] = [
-  {
-    id: 1,
-    author: "미식탐험가",
-    avatar: "ME",
-    restaurant: "스시 오마카세 히든",
-    category: "일식",
-    rating: 5,
-    date: "2026-03-18",
-    title: "인생 오마카세를 찾았습니다",
-    content: "시작부터 끝까지 완벽한 코스였습니다. 특히 중트로 나온 오토로 초밥은 입에서 녹는 경험이었고, 마무리 디저트까지 세심한 배려가 느껴졌습니다. 셰프님과의 대화도 즐거웠고, 재료 하나하나에 대한 설명이 인상적이었습니다.",
-    photos: [
-      { id: "p1", url: "", name: "오토로 초밥.jpg" },
-      { id: "p2", url: "", name: "코스 전경.jpg" },
-    ],
-    likes: 42,
-    comments: 8,
-  },
-  {
-    id: 2,
-    author: "파스타러버",
-    avatar: "PL",
-    restaurant: "트라토리아 벨라",
-    category: "이탈리안",
-    rating: 4,
-    date: "2026-03-15",
-    title: "성수동 최고의 파스타",
-    content: "까르보나라가 정말 크리미하면서도 느끼하지 않았어요. 생면의 식감이 살아있고, 관찰레의 짭짤한 맛이 절묘하게 어우러집니다. 와인 페어링도 추천드려요!",
-    photos: [
-      { id: "p3", url: "", name: "까르보나라.jpg" },
-    ],
-    likes: 28,
-    comments: 5,
-  },
-  {
-    id: 3,
-    author: "고기매니아",
-    avatar: "GM",
-    restaurant: "한우 명가",
-    category: "한식",
-    rating: 5,
-    date: "2026-03-12",
-    title: "한우의 진수를 보여주는 곳",
-    content: "채끝과 꽃등심 모두 최상급이었습니다. 숯불에 구워먹는 맛이 일품이고, 된장찌개와 반찬도 정성이 느껴집니다. 특별한 날에 꼭 다시 방문하고 싶은 곳.",
-    photos: [
-      { id: "p4", url: "", name: "꽃등심.jpg" },
-      { id: "p5", url: "", name: "채끝살.jpg" },
-      { id: "p6", url: "", name: "반찬 세팅.jpg" },
-    ],
-    likes: 56,
-    comments: 12,
-  },
-  {
-    id: 4,
-    author: "와인소믈리에",
-    avatar: "WS",
-    restaurant: "르 프티 비스트로",
-    category: "프렌치",
-    rating: 4,
-    date: "2026-03-08",
-    title: "이태원의 작은 파리",
-    content: "에스카르고부터 크렘브릴레까지 전통 프렌치 비스트로의 맛을 제대로 살렸습니다. 와인 리스트도 훌륭하고, 소믈리에의 추천이 적중했어요.",
-    photos: [
-      { id: "p7", url: "", name: "에스카르고.jpg" },
-    ],
-    likes: 34,
-    comments: 7,
-  },
-];
+const initialReviews: Review[] = [];
 
 /* ── Star Rating (display) ── */
 function StarRating({ rating }: { rating: number }) {
@@ -454,6 +386,13 @@ export default function ReviewsPage() {
       </div>
 
       <div className="space-y-6">
+        {reviews.length === 0 && (
+          <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+            <span className="text-5xl block mb-4">⭐</span>
+            <p className="text-sm">아직 등록된 리뷰가 없습니다</p>
+            <p className="text-xs mt-1">첫 번째 리뷰를 작성해보세요!</p>
+          </div>
+        )}
         {reviews.map((review) => (
           <article
             key={review.id}

@@ -1,53 +1,4 @@
-const schedules = [
-  {
-    id: 1,
-    title: "3월 정기모임: 이탈리안 나이트",
-    date: "2026-03-28",
-    time: "19:00",
-    location: "트라토리아 벨라 (성수동)",
-    description: "이번 달 정기모임은 성수동 이탈리안 레스토랑에서 진행합니다. 셰프 특별 코스를 즐겨보세요.",
-    capacity: 20,
-    registered: 14,
-    status: "모집중" as const,
-    type: "정기모임",
-  },
-  {
-    id: 2,
-    title: "와인 테이스팅 클래스",
-    date: "2026-04-05",
-    time: "15:00",
-    location: "와인홀릭 (이태원)",
-    description: "프랑스 부르고뉴 지방의 피노누아 5종을 비교 시음합니다. 초보자도 환영합니다.",
-    capacity: 12,
-    registered: 12,
-    status: "마감" as const,
-    type: "클래스",
-  },
-  {
-    id: 3,
-    title: "숨은 맛집 탐방: 을지로 편",
-    date: "2026-04-12",
-    time: "18:00",
-    location: "을지로3가역 2번 출구 집합",
-    description: "을지로의 숨겨진 노포와 핫플레이스를 함께 탐방합니다. 3곳 이상 방문 예정.",
-    capacity: 15,
-    registered: 8,
-    status: "모집중" as const,
-    type: "탐방",
-  },
-  {
-    id: 4,
-    title: "4월 정기모임: 스시 오마카세",
-    date: "2026-04-25",
-    time: "19:00",
-    location: "스시 오마카세 히든 (강남)",
-    description: "4월 정기모임은 회원들의 요청이 가장 많았던 스시 오마카세입니다.",
-    capacity: 10,
-    registered: 3,
-    status: "모집중" as const,
-    type: "정기모임",
-  },
-];
+const schedules: { id: number; title: string; date: string; time: string; location: string; description: string; capacity: number; registered: number; status: "모집중" | "마감"; type: string }[] = [];
 
 function statusStyle(status: string) {
   switch (status) {
@@ -79,21 +30,26 @@ export default function SchedulePage() {
       </div>
 
       {/* Calendar-style header */}
-      <div className="bg-gradient-to-r from-primary-500 to-orange-500 rounded-2xl p-6 mb-8 text-white">
-        <div className="text-sm font-medium text-white/80">다음 일정</div>
-        <div className="text-2xl font-bold mt-1">3월 28일 (토) - 이탈리안 나이트</div>
-        <div className="text-white/90 mt-1">트라토리아 벨라 | 19:00</div>
-        <div className="mt-4">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="w-full bg-white/30 rounded-full h-2">
-              <div className="bg-white rounded-full h-2" style={{ width: "70%" }} />
-            </div>
-            <span className="shrink-0">14/20명</span>
-          </div>
+      {schedules.length > 0 ? (
+        <div className="bg-gradient-to-r from-primary-500 to-orange-500 rounded-2xl p-6 mb-8 text-white">
+          <div className="text-sm font-medium text-white/80">다음 일정</div>
+          <div className="text-2xl font-bold mt-1">등록된 일정이 있습니다</div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-gradient-to-r from-primary-500 to-orange-500 rounded-2xl p-6 mb-8 text-white">
+          <div className="text-sm font-medium text-white/80">다음 일정</div>
+          <div className="text-2xl font-bold mt-1">아직 예정된 일정이 없습니다</div>
+          <div className="text-white/90 mt-1">곧 새로운 모임이 등록될 예정입니다</div>
+        </div>
+      )}
 
       {/* Schedule List */}
+      {schedules.length === 0 && (
+        <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+          <span className="text-5xl block mb-4">📅</span>
+          <p className="text-sm">등록된 일정이 없습니다</p>
+        </div>
+      )}
       <div className="space-y-4">
         {schedules.map((schedule) => (
           <div

@@ -23,6 +23,13 @@ const features = [
     color: "from-blue-400 to-indigo-500",
   },
   {
+    icon: "🗳️",
+    title: "투표",
+    description: "장소와 날짜를 투표로 정하고, 익명 투표도 가능합니다.",
+    href: "/vote",
+    color: "from-violet-400 to-purple-500",
+  },
+  {
     icon: "📅",
     title: "모임 일정",
     description: "미식 모임 일정을 조율하고 함께 맛집 탐방을 떠나세요.",
@@ -32,10 +39,10 @@ const features = [
 ];
 
 const stats = [
-  { label: "등록된 맛집", value: "1,200+" },
-  { label: "리뷰 수", value: "5,800+" },
-  { label: "회원 수", value: "3,400+" },
-  { label: "월간 모임", value: "48+" },
+  { label: "등록된 맛집", value: "0" },
+  { label: "리뷰 수", value: "0" },
+  { label: "회원 수", value: "1" },
+  { label: "월간 모임", value: "0" },
 ];
 
 export default function Home() {
@@ -98,7 +105,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {features.map((feature) => (
               <Link key={feature.title} href={feature.href}>
                 <div className="card-hover bg-white dark:bg-dark-card rounded-2xl p-6 h-full border border-gray-100 dark:border-gray-700">

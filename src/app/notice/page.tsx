@@ -1,45 +1,4 @@
-const notices = [
-  {
-    id: 1,
-    category: "공지",
-    title: "비밀미식회 3월 정기모임 안내",
-    date: "2026-03-15",
-    content: "3월 정기모임은 강남 이탈리안 레스토랑에서 진행됩니다. 자세한 내용은 일정 페이지를 확인해주세요.",
-    pinned: true,
-  },
-  {
-    id: 2,
-    category: "업데이트",
-    title: "캐치테이블 예약 연동 기능 업데이트",
-    date: "2026-03-10",
-    content: "이제 식당 추천 페이지에서 캐치테이블을 통해 바로 예약할 수 있습니다.",
-    pinned: true,
-  },
-  {
-    id: 3,
-    category: "공지",
-    title: "신규 회원 가입 이벤트 진행 중",
-    date: "2026-03-05",
-    content: "3월 한 달간 신규 가입 회원에게 첫 모임 참가비 50% 할인 혜택을 드립니다.",
-    pinned: false,
-  },
-  {
-    id: 4,
-    category: "이벤트",
-    title: "2월 베스트 리뷰어 선정 결과",
-    date: "2026-02-28",
-    content: "2월 한 달간 가장 양질의 리뷰를 작성해주신 분들을 발표합니다.",
-    pinned: false,
-  },
-  {
-    id: 5,
-    category: "공지",
-    title: "커뮤니티 가이드라인 업데이트",
-    date: "2026-02-20",
-    content: "보다 건전한 커뮤니티 운영을 위해 가이드라인이 일부 수정되었습니다.",
-    pinned: false,
-  },
-];
+const notices: { id: number; category: string; title: string; date: string; content: string; pinned: boolean }[] = [];
 
 function categoryColor(cat: string) {
   switch (cat) {
@@ -59,6 +18,12 @@ export default function NoticePage() {
       </div>
 
       <div className="space-y-4">
+        {notices.length === 0 && (
+          <div className="text-center py-16 text-gray-400 dark:text-gray-500">
+            <span className="text-5xl block mb-4">📢</span>
+            <p className="text-sm">아직 등록된 공지사항이 없습니다</p>
+          </div>
+        )}
         {notices.map((notice) => (
           <article
             key={notice.id}
